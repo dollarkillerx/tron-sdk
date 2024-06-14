@@ -5,22 +5,27 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"math"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/dollarkillerx/tron-sdk/pkg/address"
-	"github.com/dollarkillerx/tron-sdk/pkg/client"
-	"github.com/dollarkillerx/tron-sdk/pkg/common"
-	"github.com/dollarkillerx/tron-sdk/pkg/common/decimals"
-	"github.com/dollarkillerx/tron-sdk/pkg/keys"
-	"github.com/dollarkillerx/tron-sdk/pkg/mnemonic"
-	"github.com/dollarkillerx/tron-sdk/pkg/proto/api"
-	"github.com/dollarkillerx/tron-sdk/pkg/proto/core"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/fbsobreira/gotron-sdk/pkg/address"
+	"github.com/fbsobreira/gotron-sdk/pkg/client"
+	"github.com/fbsobreira/gotron-sdk/pkg/common"
+	"github.com/fbsobreira/gotron-sdk/pkg/common/decimals"
+	"github.com/fbsobreira/gotron-sdk/pkg/keys"
+	"github.com/fbsobreira/gotron-sdk/pkg/mnemonic"
+	"github.com/fbsobreira/gotron-sdk/pkg/proto/api"
+	"github.com/fbsobreira/gotron-sdk/pkg/proto/core"
 	"github.com/go-resty/resty/v2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -385,4 +390,104 @@ type TRC20TransactionHistoryItem struct {
 		Decimals int    `json:"decimals"`
 		Address  string `json:"address"`
 	} `json:"token_info"`
+}
+
+func (e *EasyUtilsSDK) UnpackInput(txInput, abiJson string) ([]interface{}, string, error) {
+	var data = make([]interface{}, 0)
+	abi, err := abi.JSON(strings.NewReader(abiJson))
+	if err != nil {
+		return data, "", err
+	}
+	if len(txInput) > 8 {
+		decodeSign, err := hex.DecodeString(txInput[0:8])
+		if err != nil {
+			return data, "", err
+		}
+		method, err := abi.MethodById(decodeSign)
+		if err != nil {
+			return data, "", err
+		}
+		decodedData, err := hex.DecodeString(txInput[8:])
+		if err != nil {
+			return data, "", err
+		}
+		// unpack method inputs
+		data, err = method.Inputs.Unpack(decodedData)
+		return data, method.Name, err
+	}
+	return data, "", errors.New("数据：" + txInput + "解析失败")
+}
+
+const StandardTokenABI = "[{\"inputs\":[{\"internalType\":\"string\",\"name\":\"name_\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"symbol_\",\"type\":\"string\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"Approval\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"Transfer\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"}],\"name\":\"allowance\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"approve\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"balanceOf\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"decimals\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"subtractedValue\",\"type\":\"uint256\"}],\"name\":\"decreaseAllowance\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"addedValue\",\"type\":\"uint256\"}],\"name\":\"increaseAllowance\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"name\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"symbol\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"totalSupply\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"transfer\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"transferFrom\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"
+
+func (e *EasyUtilsSDK) TRC20Tx(contract string, nodeChannel chan TxNode) {
+	for {
+		block, err := e.conn.GetNowBlock()
+		if err != nil {
+			log.Println(err)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		if len(block.Transactions) == 0 {
+			continue
+		}
+
+		for _, v := range block.Transactions {
+			if v.Transaction == nil {
+				continue
+			}
+			for _, v2 := range v.Transaction.RawData.Contract {
+				if v2.Parameter.TypeUrl != "type.googleapis.com/protocol.TriggerSmartContract" {
+					continue
+				}
+
+				tsc := core.TriggerSmartContract{}
+				err := v2.Parameter.UnmarshalTo(&tsc)
+				if err != nil {
+					continue
+				}
+
+				if contract != "" {
+					if address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String() != contract {
+						continue
+					}
+				}
+
+				params, method, err := e.UnpackInput(hex.EncodeToString(tsc.Data), StandardTokenABI)
+				if method != "transfer" {
+					continue
+				}
+				toHex := params[0].(ethCommon.Address).Hex()
+				decimals, err := e.conn.TRC20GetDecimals(address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String())
+				if err != nil {
+					continue
+				}
+				f, _ := (params[1].(*big.Int)).Float64()
+
+				nodeChannel <- TxNode{
+					FromAddress: address.HexToAddress(hex.EncodeToString(tsc.OwnerAddress)).String(),
+					ToAddress:   toHex,
+					Contract:    address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String(),
+					Amount:      f / math.Pow(10, float64(decimals.Int64())),
+				}
+			}
+		}
+
+		time.Sleep(time.Second)
+	}
+}
+
+type TxNode struct {
+	FromAddress string
+	ToAddress   string
+	Contract    string
+	Amount      float64
+}
+
+func (t *TxNode) Print() {
+	indent, err := json.MarshalIndent(t, "", " ")
+	if err == nil {
+		fmt.Println(string(indent))
+	}
 }

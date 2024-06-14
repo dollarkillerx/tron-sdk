@@ -3,9 +3,10 @@ package easy_utils
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/dollarkillerx/tron-sdk/pkg/address"
+	"github.com/fbsobreira/gotron-sdk/pkg/address"
 	"log"
 	"testing"
+	"time"
 )
 
 func TestPx(t *testing.T) {
@@ -119,4 +120,42 @@ func TestTRC20TransactionHistory(t *testing.T) {
 		panic(err)
 	}
 	fmt.Println(balance)
+}
+
+// 獲取trc20代幣轉賬記錄
+func TestTRC20Node(t *testing.T) {
+	sdk, err := NewEasyUtilsSDK("grpc.nile.trongrid.io", "https://nile.trongrid.io", "271c5ed4-9a99-48c2-8522-bceccb441927", false, 0)
+	if err != nil {
+		panic(err)
+	}
+
+	// 賬戶地址， 合約地址
+	outChannel := make(chan TxNode, 10)
+
+	go func() {
+		for {
+			token1 := "4e4770272e2a743c6c37f60cac0bb0a3cc6ff85311ba8d4944028a4816a3d2f1"
+			address2 := "TSW2S2g7JWS2FAobkpfEMBTRLZMEJddtRD"
+			contract := "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj" // 測試網絡usdt 地址
+
+			toAddress, err := sdk.SendTRC20ToAddress(token1, address2, contract, 0.02, 4)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			fmt.Println(sdk.TransactionHash(toAddress))
+			time.Sleep(time.Second)
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case data := <-outChannel:
+				data.Print()
+			}
+		}
+	}()
+
+	sdk.TRC20Tx("", outChannel)
 }

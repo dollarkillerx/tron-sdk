@@ -51,7 +51,7 @@ func TestSendTRXToAddress(t *testing.T) {
 	fmt.Println(balance)
 
 	token1 := "4e4770272e2a743c6c37f60cac0bb0a3cc6ff85311ba8d4944028a4816a3d2f1"
-	address2 := "TSW2S2g7JWS2FAobkpfEMBTRLZMEJddtRD"
+	address2 := "TAQc9hUcNv3HoSNnYGitPDz3nEBNktEMzR"
 
 	toAddress, err := sdk.SendTRXToAddress(token1, address2, 0.01, 0)
 	if err != nil {
@@ -90,10 +90,10 @@ func TestSendTRC20(t *testing.T) {
 	}
 
 	token1 := "4e4770272e2a743c6c37f60cac0bb0a3cc6ff85311ba8d4944028a4816a3d2f1"
-	address2 := "TSW2S2g7JWS2FAobkpfEMBTRLZMEJddtRD"
+	address2 := "TAQc9hUcNv3HoSNnYGitPDz3nEBNktEMzR"
 	contract := "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj" // 測試網絡usdt 地址
 
-	toAddress, err := sdk.SendTRC20ToAddress(token1, address2, contract, 1, 4)
+	toAddress, err := sdk.SendTRC20ToAddress(token1, address2, contract, 999999, 4)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -135,7 +135,7 @@ func TestTRC20Node(t *testing.T) {
 	go func() {
 		for {
 			token1 := "4e4770272e2a743c6c37f60cac0bb0a3cc6ff85311ba8d4944028a4816a3d2f1"
-			address2 := "TSW2S2g7JWS2FAobkpfEMBTRLZMEJddtRD"
+			address2 := "TAQc9hUcNv3HoSNnYGitPDz3nEBNktEMzR"
 			contract := "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj" // 測試網絡usdt 地址
 
 			toAddress, err := sdk.SendTRC20ToAddress(token1, address2, contract, 0.02, 4)
@@ -166,6 +166,7 @@ func TestParseTRC20(t *testing.T) {
 		panic(err)
 	}
 
+	//56485656c6118419fe578b53bd01c20c071960db6afdeb78a94b958061711c22
 	tx, err := sdk.GetTransactionByID("68fed6a9baa5736fff0f2a10c915d3844bd33b7dfc39af99231a59e70d73ec6f")
 	if err != nil {
 		panic(err)
@@ -179,3 +180,32 @@ func TestParseTRC20(t *testing.T) {
 	}
 	trc20.Print()
 }
+
+/**
+{
+ "raw_data": {
+  "ref_block_bytes": "8NU=",
+  "ref_block_hash": "S0DWYxmsGGY=",
+  "expiration": 1718369922000,
+  "contract": [
+   {
+    "type": 31,
+    "parameter": {
+     "type_url": "type.googleapis.com/protocol.TriggerSmartContract",
+     "value": "ChVBS3UkWwRTdKKng/jegGM4r3A1hqASFUHqUTQtq7uSiuHldr057/iq8HCoxiJEqQWcuwAAAAAAAAAAAAAAALVWFZufi4M98AV1XnmZVmrRR9YtAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATiA="
+    }
+   }
+  ],
+  "timestamp": 1718369863969,
+  "fee_limit": 1000000000
+ },
+ "signature": [
+  "knDzag6LZvajBFZIcKrlpG0zShkVCA2MQ59WZxtM86QE5yTZU++7wpBJvP5L2D27XQRKBDJQJvn8n64TaK7h7QA="
+ ],
+ "ret": [
+  {
+   "contractRet": 1
+  }
+ ]
+}
+*/

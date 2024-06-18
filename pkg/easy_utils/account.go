@@ -438,6 +438,11 @@ func (e *EasyUtilsSDK) TRC20Tx(contract string, nodeChannel chan TxNode) {
 			if v.Transaction == nil {
 				continue
 			}
+
+			if v.Transaction.Ret == nil || len(v.Transaction.Ret) != 1 || v.Transaction.Ret[0].ContractRet != 1 {
+				continue
+			}
+
 			for _, v2 := range v.Transaction.RawData.Contract {
 				if v2.Parameter.TypeUrl != "type.googleapis.com/protocol.TriggerSmartContract" {
 					continue
@@ -471,6 +476,8 @@ func (e *EasyUtilsSDK) TRC20Tx(contract string, nodeChannel chan TxNode) {
 					ToAddress:   toHex,
 					Contract:    address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String(),
 					Amount:      f / math.Pow(10, float64(decimals.Int64())),
+					Success:     true,
+					TxHash:      fmt.Sprintf("%x", v.Txid),
 				}
 			}
 		}
@@ -484,6 +491,8 @@ type TxNode struct {
 	ToAddress   string
 	Contract    string
 	Amount      float64
+	Success     bool
+	TxHash      string
 }
 
 func (t *TxNode) Print() {
@@ -499,24 +508,18 @@ func (e EasyUtilsSDK) GetTransactionByID(txHash string) (*core.Transaction, erro
 
 // ParseTRC20ByTxHash 解析TRC20交易
 func (e *EasyUtilsSDK) ParseTRC20(tx *core.Transaction, contract string) (*TxNode, error) {
-	if tx.RawData == nil {
-		return nil, errors.New("非trc20交易")
+	hash, err := e.TransactionHash(tx)
+	if err != nil {
+		return nil, errors.New("交易hash错误")
 	}
 
-	if tx.RawData.Contract == nil {
-		return nil, errors.New("非trc20交易")
-	}
-
-	if len(tx.RawData.Contract) != 1 {
-		return nil, errors.New("非trc20交易")
-	}
-
-	if tx.RawData.Contract[0].Parameter.TypeUrl != "type.googleapis.com/protocol.TriggerSmartContract" {
+	if tx.RawData == nil || tx.RawData.Contract == nil || len(tx.RawData.Contract) != 1 || tx.RawData.Contract[0].Parameter == nil ||
+		tx.RawData.Contract[0].Parameter.TypeUrl != "type.googleapis.com/protocol.TriggerSmartContract" {
 		return nil, errors.New("非trc20交易")
 	}
 
 	tsc := core.TriggerSmartContract{}
-	err := tx.RawData.Contract[0].Parameter.UnmarshalTo(&tsc)
+	err = tx.RawData.Contract[0].Parameter.UnmarshalTo(&tsc)
 	if err != nil {
 		return nil, err
 	}
@@ -543,5 +546,7 @@ func (e *EasyUtilsSDK) ParseTRC20(tx *core.Transaction, contract string) (*TxNod
 		ToAddress:   toHex,
 		Contract:    address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String(),
 		Amount:      f / math.Pow(10, float64(decimals.Int64())),
+		Success:     tx.Ret != nil && len(tx.Ret) == 1 && tx.Ret[0].ContractRet == 1,
+		TxHash:      hash,
 	}, nil
 }

@@ -420,6 +420,7 @@ func (e *EasyUtilsSDK) UnpackInput(txInput, abiJson string) ([]interface{}, stri
 
 const StandardTokenABI = "[{\"inputs\":[{\"internalType\":\"string\",\"name\":\"name_\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"symbol_\",\"type\":\"string\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"Approval\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"Transfer\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"}],\"name\":\"allowance\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"approve\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"balanceOf\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"decimals\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"subtractedValue\",\"type\":\"uint256\"}],\"name\":\"decreaseAllowance\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"addedValue\",\"type\":\"uint256\"}],\"name\":\"increaseAllowance\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"name\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"symbol\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"totalSupply\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"transfer\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"transferFrom\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"
 
+// TRC20Tx 监听TRC20交易 可指定合约
 func (e *EasyUtilsSDK) TRC20Tx(contract string, nodeChannel chan TxNode) {
 	for {
 		block, err := e.conn.GetNowBlock()
@@ -490,4 +491,57 @@ func (t *TxNode) Print() {
 	if err == nil {
 		fmt.Println(string(indent))
 	}
+}
+
+func (e EasyUtilsSDK) GetTransactionByID(txHash string) (*core.Transaction, error) {
+	return e.conn.GetTransactionByID(txHash)
+}
+
+// ParseTRC20ByTxHash 解析TRC20交易
+func (e *EasyUtilsSDK) ParseTRC20(tx *core.Transaction, contract string) (*TxNode, error) {
+	if tx.RawData == nil {
+		return nil, errors.New("非trc20交易")
+	}
+
+	if tx.RawData.Contract == nil {
+		return nil, errors.New("非trc20交易")
+	}
+
+	if len(tx.RawData.Contract) != 1 {
+		return nil, errors.New("非trc20交易")
+	}
+
+	if tx.RawData.Contract[0].Parameter.TypeUrl != "type.googleapis.com/protocol.TriggerSmartContract" {
+		return nil, errors.New("非trc20交易")
+	}
+
+	tsc := core.TriggerSmartContract{}
+	err := tx.RawData.Contract[0].Parameter.UnmarshalTo(&tsc)
+	if err != nil {
+		return nil, err
+	}
+
+	if address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String() != contract {
+		return nil, errors.New("非指定trc20交易")
+	}
+
+	params, method, err := e.UnpackInput(hex.EncodeToString(tsc.Data), StandardTokenABI)
+	if method != "transfer" {
+		return nil, errors.New("非trc20交易")
+	}
+
+	toHex := params[0].(ethCommon.Address).Hex()
+	decimals, err := e.conn.TRC20GetDecimals(address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String())
+	if err != nil {
+		return nil, err
+	}
+
+	f, _ := (params[1].(*big.Int)).Float64()
+
+	return &TxNode{
+		FromAddress: address.HexToAddress(hex.EncodeToString(tsc.OwnerAddress)).String(),
+		ToAddress:   toHex,
+		Contract:    address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String(),
+		Amount:      f / math.Pow(10, float64(decimals.Int64())),
+	}, nil
 }

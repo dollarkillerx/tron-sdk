@@ -159,3 +159,23 @@ func TestTRC20Node(t *testing.T) {
 
 	sdk.TRC20Tx("", outChannel)
 }
+
+func TestParseTRC20(t *testing.T) {
+	sdk, err := NewEasyUtilsSDK("grpc.nile.trongrid.io", "https://nile.trongrid.io", "271c5ed4-9a99-48c2-8522-bceccb441927", false, 0)
+	if err != nil {
+		panic(err)
+	}
+
+	tx, err := sdk.GetTransactionByID("68fed6a9baa5736fff0f2a10c915d3844bd33b7dfc39af99231a59e70d73ec6f")
+	if err != nil {
+		panic(err)
+	}
+
+	contract := "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj" // 測試網絡usdt 地址
+
+	trc20, err := sdk.ParseTRC20(tx, contract)
+	if err != nil {
+		panic(err)
+	}
+	trc20.Print()
+}

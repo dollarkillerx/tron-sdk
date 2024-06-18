@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"math/big"
 	"os"
@@ -422,68 +421,97 @@ const StandardTokenABI = "[{\"inputs\":[{\"internalType\":\"string\",\"name\":\"
 
 // TRC20Tx 监听TRC20交易 可指定合约
 func (e *EasyUtilsSDK) TRC20Tx(contract string, nodeChannel chan TxNode) {
-	for {
-		block, err := e.conn.GetNowBlock()
-		if err != nil {
-			log.Println(err)
-			time.Sleep(time.Second)
-			continue
-		}
-
-		if len(block.Transactions) == 0 {
-			continue
-		}
-
-		for _, v := range block.Transactions {
-			if v.Transaction == nil {
-				continue
-			}
-
-			if v.Transaction.Ret == nil || len(v.Transaction.Ret) != 1 || v.Transaction.Ret[0].ContractRet != 1 {
-				continue
-			}
-
-			for _, v2 := range v.Transaction.RawData.Contract {
-				if v2.Parameter.TypeUrl != "type.googleapis.com/protocol.TriggerSmartContract" {
-					continue
-				}
-
-				tsc := core.TriggerSmartContract{}
-				err := v2.Parameter.UnmarshalTo(&tsc)
-				if err != nil {
-					continue
-				}
-
-				if contract != "" {
-					if address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String() != contract {
-						continue
-					}
-				}
-
-				params, method, err := e.UnpackInput(hex.EncodeToString(tsc.Data), StandardTokenABI)
-				if method != "transfer" {
-					continue
-				}
-				toHex := params[0].(ethCommon.Address).Hex()
-				decimals, err := e.conn.TRC20GetDecimals(address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String())
-				if err != nil {
-					continue
-				}
-				f, _ := (params[1].(*big.Int)).Float64()
-
-				nodeChannel <- TxNode{
-					FromAddress: address.HexToAddress(hex.EncodeToString(tsc.OwnerAddress)).String(),
-					ToAddress:   toHex,
-					Contract:    address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String(),
-					Amount:      f / math.Pow(10, float64(decimals.Int64())),
-					Success:     true,
-					TxHash:      fmt.Sprintf("%x", v.Txid),
-				}
-			}
-		}
-
-		time.Sleep(time.Second)
+	block, err := e.conn.GetNowBlock()
+	if err != nil {
+		panic(err)
 	}
+
+	startNum := block.BlockHeader.RawData.Number
+	for {
+		if startNum == block.BlockHeader.RawData.Number {
+			txs, ok := e.ParseBlock(block, contract)
+			if ok {
+				for i, _ := range txs {
+					idx := i
+					nodeChannel <- txs[idx]
+				}
+			}
+			startNum++
+			time.Sleep(time.Second)
+		} else {
+			bk, err := e.conn.GetBlockByNum(startNum)
+			if err != nil {
+				fmt.Printf("EasyUtilsSDK Errors: %s", err)
+				time.Sleep(time.Second)
+				continue
+			}
+			if bk.BlockHeader != nil {
+				block = bk
+				startNum = bk.BlockHeader.RawData.Number
+			} else {
+				time.Sleep(time.Second)
+				continue
+			}
+		}
+	}
+}
+
+func (e *EasyUtilsSDK) ParseBlock(block *api.BlockExtention, contract string) (result []TxNode, err bool) {
+	if block.Transactions == nil {
+		return nil, false
+	}
+
+	for _, v := range block.Transactions {
+		if v.Transaction == nil {
+			continue
+		}
+
+		if v.Transaction.Ret == nil || len(v.Transaction.Ret) != 1 || v.Transaction.Ret[0].ContractRet != 1 {
+			fmt.Println(len(v.Transaction.Ret))
+			fmt.Println(v.Transaction.Ret)
+			continue
+		}
+
+		for _, v2 := range v.Transaction.RawData.Contract {
+			if v2.Parameter.TypeUrl != "type.googleapis.com/protocol.TriggerSmartContract" {
+				continue
+			}
+
+			tsc := core.TriggerSmartContract{}
+			err := v2.Parameter.UnmarshalTo(&tsc)
+			if err != nil {
+				continue
+			}
+
+			if contract != "" {
+				if address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String() != contract {
+					continue
+				}
+			}
+
+			params, method, err := e.UnpackInput(hex.EncodeToString(tsc.Data), StandardTokenABI)
+			if method != "transfer" {
+				continue
+			}
+			toHex := params[0].(ethCommon.Address).Hex()
+			decimals, err := e.conn.TRC20GetDecimals(address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String())
+			if err != nil {
+				continue
+			}
+			f, _ := (params[1].(*big.Int)).Float64()
+
+			result = append(result, TxNode{
+				FromAddress: address.HexToAddress(hex.EncodeToString(tsc.OwnerAddress)).String(),
+				ToAddress:   toHex,
+				Contract:    address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String(),
+				Amount:      f / math.Pow(10, float64(decimals.Int64())),
+				Success:     true,
+				TxHash:      fmt.Sprintf("%x", v.Txid),
+			})
+		}
+	}
+
+	return result, len(result) != 0
 }
 
 type TxNode struct {

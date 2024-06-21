@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -364,6 +365,11 @@ func (e *EasyUtilsSDK) TRC20TransactionHistory(address string, contract string, 
 		return nil, err
 	}
 
+	for i, v := range history.Data {
+		int64Value, _ := strconv.ParseInt(v.Value, 10, 64)
+		history.Data[i].ValueFloat = float64(int64Value) / math.Pow(10, float64(v.TokenInfo.Decimals))
+	}
+
 	return history.Data, nil
 }
 
@@ -377,12 +383,13 @@ type _TRC20TransactionHistory struct {
 }
 
 type TRC20TransactionHistoryItem struct {
-	TransactionId  string `json:"transaction_id"`
-	BlockTimestamp int64  `json:"block_timestamp"`
-	From           string `json:"from"`
-	To             string `json:"to"`
-	Value          string `json:"value"`
-	Type           string `json:"type"`
+	TransactionId  string  `json:"transaction_id"`
+	BlockTimestamp int64   `json:"block_timestamp"`
+	From           string  `json:"from"`
+	To             string  `json:"to"`
+	Value          string  `json:"value"`
+	ValueFloat     float64 `json:"value_float"`
+	Type           string  `json:"type"`
 	TokenInfo      struct {
 		Name     string `json:"name"`
 		Symbol   string `json:"symbol"`
@@ -502,7 +509,7 @@ func (e *EasyUtilsSDK) ParseBlock(block *api.BlockExtention, contract string) (r
 
 			result = append(result, TxNode{
 				FromAddress: address.HexToAddress(hex.EncodeToString(tsc.OwnerAddress)).String(),
-				ToAddress:   toHex,
+				ToAddress:   address.HexToAddress(toHex).String(),
 				Contract:    address.HexToAddress(hex.EncodeToString(tsc.ContractAddress)).String(),
 				Amount:      f / math.Pow(10, float64(decimals.Int64())),
 				Success:     true,
